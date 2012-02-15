@@ -384,6 +384,9 @@ class UnitOfWork
             foreach ($class->reflFields as $prop => $reflFields) {
                 $value = isset($documentState[$prop]) ? $documentState[$prop] : null;
                 $reflFields->setValue($document, $value);
+                if ($value instanceof ChildrenCollection) {
+                    $value = clone $value;
+                }
                 $this->originalData[$oid][$prop] = $value;
             }
         }
@@ -885,6 +888,47 @@ class UnitOfWork
             }
         }
 
+        foreach ($class->childrenMappings as $name => $childMapping) {
+            if (empty($actualData[$name])) {
+                if ($this->originalData[$oid][$name]) {
+                    foreach ($this->originalData[$oid][$name] as $child) {
+                        $this->scheduleRemove($child);
+                    }
+                }
+
+                continue;
+            }
+
+            if ($this->originalData[$oid][$name]) {
+                $childIds = array();
+
+                foreach ($actualData[$name] as $child) {
+                    $childClass = $this->dm->getClassMetadata(get_class($child));
+                    $nodename = $childClass->nodename
+                        ? $childClass->reflFields[$childClass->nodename]->getValue($child)
+                        : basename($childClass->getIdentifierValue($child));
+                    $this->computeChildChanges($childMapping, $child, $id, $nodename);
+                    $childIds[] = $this->documentIds[spl_object_hash($child)];
+                }
+
+                foreach ($this->originalData[$oid][$name] as $child) {
+                    $childId = $this->documentIds[spl_object_hash($child)];
+                    if (!in_array($childId, $childIds)) {
+                        $this->scheduleRemove($child);
+                    }
+                }
+
+            } else {
+                foreach ($actualData[$name] as $child) {
+                    $childClass = $this->dm->getClassMetadata(get_class($child));
+                    $nodename = $childClass->nodename
+                        ? $childClass->reflFields[$childClass->nodename]->getValue($child)
+                        : basename($childClass->getIdentifierValue($child));
+                    $this->computeChildChanges($childMapping, $child, $id, $nodename);
+                }
+            }
+        }
+
         foreach ($class->associationsMappings as $assocName => $assoc) {
             if ($actualData[$assocName]) {
                 if (is_array($actualData[$assocName]) || $actualData[$assocName] instanceof Collection) {
@@ -913,17 +957,16 @@ class UnitOfWork
      *
      * @param mixed $child the child document.
      */
-    private function computeChildChanges($mapping, $child, $parentId)
+    private function computeChildChanges($mapping, $child, $parentId, $nodename = null)
     {
         $targetClass = $this->dm->getClassMetadata(get_class($child));
         $state = $this->getDocumentState($child);
 
         if ($state === self::STATE_NEW) {
-            $targetClass->setIdentifierValue($child, $parentId.'/'.$mapping['name']);
+            $nodename = $nodename ?: $mapping['name'];
+            $targetClass->setIdentifierValue($child, $parentId.'/'.$nodename);
             $this->persistNew($targetClass, $child, ClassMetadata::GENERATOR_TYPE_ASSIGNED);
             $this->computeChangeSet($targetClass, $child);
-        } elseif ($state === self::STATE_REMOVED) {
-            throw new \InvalidArgumentException('Removed child document detected during flush');
         } elseif ($state === self::STATE_DETACHED) {
             throw new \InvalidArgumentException('A detached document was found through a child relationship during cascading a persist operation.');
         }

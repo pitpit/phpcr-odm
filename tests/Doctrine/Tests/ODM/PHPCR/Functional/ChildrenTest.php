@@ -141,6 +141,52 @@ class ChildrenTest extends \Doctrine\Tests\ODM\PHPCR\PHPCRFunctionalTestCase
         $parent = $this->dm->find('Doctrine\Tests\ODM\PHPCR\Functional\ChildrenTestObj', '/functional/parent');
         $this->assertNull($parent);
     }
+
+    public function testModifyChildren()
+    {
+        $parent = $this->dm->find('Doctrine\Tests\ODM\PHPCR\Functional\ChildrenTestObj', '/functional/parent');
+        $this->assertCount(4, $parent->allChildren);
+
+        $child = $parent->allChildren->first();
+        $child->name = 'New name';
+
+        $parent->allChildren->remove('child-b');
+        $parent->allChildren->remove('child-c');
+
+        $child = new ChildrenTestObj();
+        $child->id = '/functional/parent/child-e';
+        $child->name = 'Child E';
+
+        $parent->allChildren->add($child);
+        $this->assertCount(3, $parent->allChildren);
+
+        $this->dm->flush();
+        $this->dm->clear();
+
+        $parent = $this->dm->find('Doctrine\Tests\ODM\PHPCR\Functional\ChildrenTestObj', '/functional/parent');
+        $this->assertEquals('New name', $parent->allChildren->first()->name);
+        $this->assertCount(3, $parent->allChildren);
+
+        $parent->allChildren->clear();
+
+        $this->dm->flush();
+        $this->dm->clear();
+
+        $parent = $this->dm->find('Doctrine\Tests\ODM\PHPCR\Functional\ChildrenTestObj', '/functional/parent');
+        $this->assertCount(0, $parent->allChildren);
+
+        $child = new ChildrenTestObj();
+        $child->id = '/functional/parent/child-f';
+        $child->name = 'Child F';
+
+        $parent->allChildren->add($child);
+
+        $this->dm->flush();
+        $this->dm->clear();
+
+        $parent = $this->dm->find('Doctrine\Tests\ODM\PHPCR\Functional\ChildrenTestObj', '/functional/parent');
+        $this->assertCount(1, $parent->allChildren);
+    }
 }
 
 /**
