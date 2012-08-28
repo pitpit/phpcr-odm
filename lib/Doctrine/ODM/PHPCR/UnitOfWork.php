@@ -1460,7 +1460,7 @@ class UnitOfWork
                     } else if ($class->fieldMappings[$fieldName]['name'] === 'jcr:created' || $class->fieldMappings[$fieldName]['name'] === 'jcr:createdBy') { 
                         // skip PROTECTED properties jcr:created and jcr:createdBy
                     } else {
-                        $node->setProperty($class->fieldMappings[$fieldName]['name'], $fieldValue, $type);
+                        $node->setProperty($class->fieldMappings[$fieldName]['name'], $fieldValue, $type, false);
                     }
                 } elseif (isset($class->associationsMappings[$fieldName]) && $this->writeMetadata) {
 
